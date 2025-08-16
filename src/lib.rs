@@ -64,4 +64,6 @@ mod unmount;
 
 #[cfg(all(feature = "std", test))]
 mod tests;
+
+#[cfg(feature = "std")]
 mod lru_cache;

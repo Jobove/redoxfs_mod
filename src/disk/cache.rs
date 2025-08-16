@@ -33,17 +33,17 @@ fn current_timestamp() -> u64 {
 }
 
 impl<T: Disk> DiskCache<T> {
-    pub fn new(inner: T, cache_size: usize, writeback_interval: u64) -> Self {
+    pub fn new(inner: T) -> Self {
         // 16 MB cache
-        // let size = 16 * 1024 * 1024 / BLOCK_SIZE as usize;
+        let size = 16 * 1024 * 1024 / BLOCK_SIZE as usize;
+        let writeback_interval = 5u64;
         DiskCache {
             inner,
-            cache: LruCache::new(cache_size),
+            cache: LruCache::new(size),
             last_writeback: AtomicU64::new(current_timestamp()),
             writeback_interval,
-            order: VecDeque::with_capacity(cache_size),
-            size: cache_size,
-            // size,
+            order: VecDeque::with_capacity(size),
+            size,
         }
     }
 

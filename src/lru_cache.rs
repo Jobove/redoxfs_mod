@@ -14,6 +14,8 @@ pub struct LruCache<K, V> {
     free_indices: Vec<usize>,
 }
 
+use alloc::vec::Vec;
+
 impl<K, V> LruCache<K, V>
     where K: Eq + Clone + core::hash::Hash {
     pub fn new(capacity: usize) -> LruCache<K, V> {
@@ -28,9 +30,9 @@ impl<K, V> LruCache<K, V>
     }
 
     pub fn get(&mut self, key: &K) -> Option<&V> {
-        let index = self.map.get(key)?;
-        self.move_to_head(*index);
-        Some(&self.nodes[*index].value)
+        let index = *self.map.get(key)?;
+        self.move_to_head(index);
+        Some(&self.nodes[index].value)
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
