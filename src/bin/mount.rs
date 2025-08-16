@@ -292,7 +292,7 @@ fn daemon(
             capability_mode();
 
             println!(
-                "redoxfs: mounted filesystem on {} to {}",
+                "redoxfs: mounted filesystem on {} to {} testtesttesttesttesttest",
                 path,
                 mounted_path.display()
             );
