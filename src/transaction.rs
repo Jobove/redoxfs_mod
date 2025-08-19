@@ -16,7 +16,7 @@ use crate::{
     htree::{self, HTreeHash, HTreeNode, HTreePtr},
     AllocEntry, AllocList, Allocator, BlockAddr, BlockData, BlockLevel, BlockPtr, BlockTrait,
     DirEntry, DirList, Disk, FileSystem, Header, Node, NodeLevel, RecordRaw, TreeData, TreePtr,
-    ALLOC_GC_THRESHOLD, ALLOC_LIST_ENTRIES, DIR_ENTRY_MAX_LENGTH, HEADER_RING,
+    PageTable, ALLOC_GC_THRESHOLD, ALLOC_LIST_ENTRIES, DIR_ENTRY_MAX_LENGTH, HEADER_RING,
 };
 
 pub struct Transaction<'a, D: Disk> {
@@ -422,6 +422,18 @@ impl<'a, D: Disk> Transaction<'a, D> {
             return Err(Error::new(ENOENT));
         }
 
+        let block_ptr_opt = {
+            let map = self.fs.inode_to_block_id.read().unwrap();
+            map.get(&ptr.id()).cloned()
+        };
+
+        if let Some(bock_ptr) = block_ptr_opt {
+            let raw = self.read_block(bock_ptr)?;
+            let mut data = T::empty(BlockLevel::default()).unwrap();
+            data.copy_from_slice(raw.data());
+            return Ok((TreeData::new(ptr.id(), data), raw.addr()))
+        }
+
         let (i3, i2, i1, i0) = ptr.indexes();
         let l3 = self.read_block(self.header.tree)?;
         let l2 = self.read_block(l3.data().ptrs[i3])?;
@@ -429,7 +441,6 @@ impl<'a, D: Disk> Transaction<'a, D> {
         let l0 = self.read_block(l1.data().ptrs[i1])?;
         let raw = self.read_block(l0.data().ptrs[i0])?;
 
-        //TODO: transmute instead of copy?
         let mut data = match T::empty(BlockLevel::default()) {
             Some(some) => some,
             None => {
@@ -439,6 +450,8 @@ impl<'a, D: Disk> Transaction<'a, D> {
             }
         };
         data.copy_from_slice(raw.data());
+        let mut map = self.fs.inode_to_block_id.write().unwrap();
+        map.insert(ptr.id(), raw.create_ptr());
 
         Ok((TreeData::new(ptr.id(), data), raw.addr()))
     }
@@ -507,6 +520,8 @@ impl<'a, D: Disk> Transaction<'a, D> {
                             l3.data_mut().ptrs[i3] = self.sync_block(l2)?;
                             self.header.tree = self.sync_block(l3)?;
                             self.header_changed = true;
+                            
+                            self.fs.inode_to_block_id.write().unwrap().insert(tree_ptr.id(), block_ptr.cast());
 
                             return Ok(tree_ptr);
                         }
@@ -574,7 +589,8 @@ impl<'a, D: Disk> Transaction<'a, D> {
         } else {
             self.sync_block(l3)?
         };
-
+        
+        self.fs.inode_to_block_id.write().unwrap().remove(&ptr.id());
         self.header.tree = l3_ptr;
         self.header_changed = true;
         Ok(())

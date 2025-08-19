@@ -29,7 +29,7 @@ pub struct Header {
     pub alloc: BlockPtr<AllocList>,
     /// Key slots
     pub key_slots: [KeySlot; 64],
-    /// Padding
+    /// Padding to make the header size equal to BLOCK_SIZE, 3176 equals to the size of the rest of the header.
     pub padding: [u8; BLOCK_SIZE as usize - 3176],
     /// encrypted hash of header data without hash, set to hash and padded if disk is not encrypted
     pub encrypted_hash: [u8; 16],
