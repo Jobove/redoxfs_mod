@@ -422,10 +422,9 @@ impl<'a, D: Disk> Transaction<'a, D> {
             return Err(Error::new(ENOENT));
         }
 
-        let block_ptr_opt =
-            self.fs.inode_to_block_id.read().unwrap().get(&ptr.id()).cloned();
-
-        if let Some(bock_ptr) = block_ptr_opt {
+        if let Some(bock_ptr) =
+            self.fs.inode_to_block_id.get_mut().unwrap().get(&ptr.id()).cloned()
+        {
             let raw = self.read_block(bock_ptr)?;
             let mut data = T::empty(BlockLevel::default()).unwrap();
             data.copy_from_slice(raw.data());
@@ -452,7 +451,8 @@ impl<'a, D: Disk> Transaction<'a, D> {
         // Remember that if there is a free block at any level it will always sync when it
         // allocates at the lowest level, so we can save a write by not writing each level as it
         // is allocated.
-        let id = self.fs.treetable.write().unwrap().insert().unwrap();
+        let mut lock = self.fs.treetable.write().unwrap();
+        let id = lock.insert().unwrap();
         self.fs.inode_to_block_id.write().unwrap().insert(id, unsafe { block_ptr.cast() });
         let tree_ptr = TreePtr::new(id);
 
@@ -532,11 +532,9 @@ impl<'a, D: Disk> Transaction<'a, D> {
         }
 
         for node in nodes.iter().rev() {
-            let block_ptr_opt = {
-                self.fs.inode_to_block_id.read().unwrap().get(&node.id()).cloned()
-            };
+            let lock = self.fs.inode_to_block_id.get_mut().unwrap();
 
-            if let Some(block_ptr) = block_ptr_opt {
+            if let Some(&block_ptr) = lock.get(&node.id()) {
                 let mut raw = self.read_block(block_ptr)?;
                 if raw.data().deref() == node.data().deref() {
                     continue;
@@ -1035,7 +1033,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
                     unsafe { self.deallocate(block_ptr.addr()) };
                     return Ok(Some(node_ptr.id()));
                 }
-                return Ok((None));
+                return Ok(None);
             }
         }
 
