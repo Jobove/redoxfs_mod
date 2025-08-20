@@ -390,6 +390,9 @@ impl<D: Disk> Filesystem for Fuse<'_, D> {
         }) {
             Ok(node) => {
                 // println!("Create {:?}:{:o}:{:o}", node.1.name(), node.1.mode, mode);
+                self.fs.path_to_inode.write().unwrap().insert(
+                    name.to_str().unwrap().to_string(), node.id() as u64
+                );
                 reply.created(&TTL, &node_attr(&node), 0, 0, 0);
             }
             Err(error) => {
@@ -420,6 +423,9 @@ impl<D: Disk> Filesystem for Fuse<'_, D> {
         }) {
             Ok(node) => {
                 // println!("Mkdir {:?}:{:o}:{:o}", node.1.name(), node.1.mode, mode);
+                self.fs.path_to_inode.write().unwrap().insert(
+                    name.to_str().unwrap().to_string(), node.id() as u64
+                );
                 reply.entry(&TTL, &node_attr(&node), 0);
             }
             Err(error) => {
@@ -435,6 +441,7 @@ impl<D: Disk> Filesystem for Fuse<'_, D> {
             .tx(|tx| tx.remove_node(parent_ptr, name.to_str().unwrap(), Node::MODE_DIR))
         {
             Ok(_) => {
+                self.fs.path_to_inode.write().unwrap().remove(name.to_str().unwrap());
                 reply.ok();
             }
             Err(err) => {
@@ -450,6 +457,7 @@ impl<D: Disk> Filesystem for Fuse<'_, D> {
             .tx(|tx| tx.remove_node(parent_ptr, name.to_str().unwrap(), Node::MODE_FILE))
         {
             Ok(_) => {
+                self.fs.path_to_inode.write().unwrap().remove(name.to_str().unwrap());
                 reply.ok();
             }
             Err(err) => {
@@ -492,10 +500,12 @@ impl<D: Disk> Filesystem for Fuse<'_, D> {
                 mtime.as_secs(),
                 mtime.subsec_nanos(),
             )?;
-
             Ok(node)
         }) {
             Ok(node) => {
+                self.fs.path_to_inode.write().unwrap().insert(
+                    name.to_str().unwrap().to_string(), node.id() as u64
+                );
                 reply.entry(&TTL, &node_attr(&node), 0);
             }
             Err(error) => {

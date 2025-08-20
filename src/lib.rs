@@ -40,6 +40,7 @@ pub use self::transaction::Transaction;
 pub use self::tree::{Tree, TreeData, TreeList, TreePtr};
 #[cfg(feature = "std")]
 pub use self::unmount::unmount_path;
+pub use self::tree::PageTable;
 
 mod allocator;
 #[cfg(feature = "std")]

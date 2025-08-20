@@ -1,11 +1,14 @@
 use aes::Aes128;
 use alloc::collections::VecDeque;
+use std::collections::BTreeMap;
+use std::sync::RwLock;
 use syscall::error::{Error, Result, EKEYREJECTED, ENOENT, ENOKEY};
 use xts_mode::{get_tweak_default, Xts128};
 
 #[cfg(feature = "std")]
-use crate::{AllocEntry, AllocList, BlockData, BlockTrait, Key, KeySlot, Node, Salt, TreeList};
-use crate::{Allocator, BlockAddr, BlockLevel, Disk, Header, Transaction, BLOCK_SIZE, HEADER_RING};
+use crate::{AllocEntry, AllocList, BlockData, BlockTrait, Key, KeySlot, Node, Salt, TreeList,
+            Allocator, BlockAddr, BlockLevel, BlockPtr, BlockRaw, Disk, Header, Transaction,
+            BLOCK_SIZE, HEADER_RING, PageTable};
 
 /// A file system
 pub struct FileSystem<D: Disk> {
@@ -17,6 +20,9 @@ pub struct FileSystem<D: Disk> {
     pub header: Header,
     pub(crate) allocator: Allocator,
     pub(crate) cipher_opt: Option<Xts128<Aes128>>,
+    pub(crate) inode_to_block_id: RwLock<BTreeMap<u32, BlockPtr<BlockRaw>>>,
+    pub(crate) path_to_inode: RwLock<BTreeMap<String, u64>>,
+    pub(crate) treetable: RwLock<PageTable>,
 }
 
 impl<D: Disk> FileSystem<D> {
@@ -81,6 +87,9 @@ impl<D: Disk> FileSystem<D> {
                 header,
                 allocator: Allocator::default(),
                 cipher_opt,
+                inode_to_block_id: RwLock::new(BTreeMap::new()),
+                path_to_inode: RwLock::new(BTreeMap::new()),
+                treetable: RwLock::new(PageTable::new()),
             };
 
             unsafe { fs.reset_allocator()? };
@@ -160,6 +169,9 @@ impl<D: Disk> FileSystem<D> {
             header,
             allocator: Allocator::default(),
             cipher_opt,
+            inode_to_block_id: RwLock::new(BTreeMap::new()),
+            path_to_inode: RwLock::new(BTreeMap::new()),
+            treetable: RwLock::new(PageTable::new()),
         };
 
         // Write header generation zero

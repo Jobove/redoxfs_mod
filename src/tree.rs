@@ -222,6 +222,150 @@ impl<T> Default for TreePtr<T> {
     }
 }
 
+pub struct PageTable {
+    root: Level1,
+}
+
+struct Level1 {
+    children: [Option<Box<Level2>>; TREE_LIST_ENTRIES],
+}
+
+struct Level2 {
+    children: [Option<Box<Level3>>; TREE_LIST_ENTRIES],
+}
+
+struct Level3 {
+    children: [Option<Box<Level4>>; TREE_LIST_ENTRIES],
+}
+
+struct Level4 {
+    allocated: [bool; TREE_LIST_ENTRIES],
+}
+
+impl PageTable {
+    pub fn new() -> Self {
+        Self {
+            root: Level1::new(),
+        }
+    }
+
+    pub fn insert(&mut self) -> Option<u32> {
+        for a in 0..TREE_LIST_ENTRIES {
+            if self.root.children[a].is_none() {
+                self.root.children[a] = Some(Box::new(Level2::new()));
+            }
+
+            let level2 = self.root.children[a].as_mut().unwrap();
+            for b in 0..TREE_LIST_ENTRIES {
+                if level2.children[b].is_none() {
+                    level2.children[b] = Some(Box::new(Level3::new()));
+                }
+
+                let level3 = level2.children[b].as_mut().unwrap();
+                for c in 0..TREE_LIST_ENTRIES {
+                    if level3.children[c].is_none() {
+                        level3.children[c] = Some(Box::new(Level4::new()));
+                    }
+
+                    let level4 = level3.children[c].as_mut().unwrap();
+                    if let Some(d) = level4.find_free_slot() {
+                        return Some(Self::from_indexes((a, b, c, d)));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn free(&mut self, id: u32) -> Result<(), &'static str> {
+        let (a, b, c, d) = self.indexes(id);
+
+        let level2 = self.root.children[a]
+            .as_mut()
+            .ok_or("Invalid level1 index")?;
+
+        let level3 = level2.children[b].as_mut().ok_or("Invalid level2 index")?;
+
+        let level4 = level3.children[c].as_mut().ok_or("Invalid level3 index")?;
+
+        level4.free_slot(d)
+    }
+
+    fn from_indexes(indexes: (usize, usize, usize, usize)) -> u32 {
+        let (a, b, c, d) = indexes;
+        ((a << (3 * TREE_LIST_SHIFT)) | (b << (2 * TREE_LIST_SHIFT)) | (c << TREE_LIST_SHIFT) | d)
+            as u32
+    }
+
+    fn indexes(&self, id: u32) -> (usize, usize, usize, usize) {
+        let mask = (1 << TREE_LIST_SHIFT) - 1;
+        (
+            ((id >> (3 * TREE_LIST_SHIFT)) & mask) as usize,
+            ((id >> (2 * TREE_LIST_SHIFT)) & mask) as usize,
+            ((id >> TREE_LIST_SHIFT) & mask) as usize,
+            (id & mask) as usize,
+        )
+    }
+}
+
+const ARRAY_REPEAT_LV2: Option<Box<Level2>> = None;
+impl Level1 {
+    fn new() -> Self {
+        Self {
+            children: [ARRAY_REPEAT_LV2; TREE_LIST_ENTRIES],
+        }
+    }
+}
+
+const ARRAY_REPEAT_LV3: Option<Box<Level3>> = None;
+// 各层级初始化方法
+impl Level2 {
+    fn new() -> Self {
+        Self {
+            children: [ARRAY_REPEAT_LV3; TREE_LIST_ENTRIES],
+        }
+    }
+}
+
+const ARRAY_REPEAT_LV4: Option<Box<Level4>> = None;
+impl Level3 {
+    fn new() -> Self {
+        Self {
+            children: [ARRAY_REPEAT_LV4; TREE_LIST_ENTRIES],
+        }
+    }
+}
+
+impl Level4 {
+    fn new() -> Self {
+        Self {
+            allocated: [false; TREE_LIST_ENTRIES],
+        }
+    }
+
+    fn find_free_slot(&mut self) -> Option<usize> {
+        self.allocated
+            .iter_mut()
+            .enumerate()
+            .find(|(_, &mut allocated)| !allocated)
+            .map(|(d, allocated)| {
+                *allocated = true;
+                d
+            })
+    }
+
+    fn free_slot(&mut self, d: usize) -> Result<(), &'static str> {
+        if d >= TREE_LIST_ENTRIES {
+            return Err("Invalid level4 index");
+        }
+        if !self.allocated[d] {
+            return Err("Slot already free");
+        }
+        self.allocated[d] = false;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{BlockAddr, BlockData};
