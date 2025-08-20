@@ -930,7 +930,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
         parent_ptr: TreePtr<Node>,
         name: &str,
         mode: u16,
-    ) -> Result<()> {
+    ) -> Result<Option<u32>> {
         let mut parent = self.read_tree(parent_ptr)?;
         let record_level = parent.data().record_level();
         let records = parent.data().size() / record_level.bytes();
@@ -1033,9 +1033,9 @@ impl<'a, D: Disk> Transaction<'a, D> {
                             .remove(&node_ptr.id())
                             .unwrap_or_else(|| panic!("Node not found in INODE2BID"));
                     unsafe { self.deallocate(block_ptr.addr()) };
+                    return Ok(Some(node_ptr.id()));
                 }
-
-                return Ok(());
+                return Ok((None));
             }
         }
 
