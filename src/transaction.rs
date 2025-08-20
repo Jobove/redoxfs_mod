@@ -429,18 +429,19 @@ impl<'a, D: Disk> Transaction<'a, D> {
             data.copy_from_slice(raw.data());
             return Ok((TreeData::new(ptr.id(), data), raw.addr()))
         }
+        panic!("READ_TREE: ID IS NULL");
 
-        let (i3, i2, i1, i0) = ptr.indexes();
-        let l3 = self.read_block(self.header.tree)?;
-        let l2 = self.read_block(l3.data().ptrs[i3])?;
-        let l1 = self.read_block(l2.data().ptrs[i2])?;
-        let l0 = self.read_block(l1.data().ptrs[i1])?;
-        let raw = self.read_block(l0.data().ptrs[i0])?;
-
-        let mut data = T::empty(BlockLevel::default()).unwrap();
-        data.copy_from_slice(raw.data());
-        self.fs.inode_to_block_id.get_mut().unwrap().insert(ptr.id(), l0.data().ptrs[i0]);
-        Ok((TreeData::new(ptr.id(), data), raw.addr()))
+        // let (i3, i2, i1, i0) = ptr.indexes();
+        // let l3 = self.read_block(self.header.tree)?;
+        // let l2 = self.read_block(l3.data().ptrs[i3])?;
+        // let l1 = self.read_block(l2.data().ptrs[i2])?;
+        // let l0 = self.read_block(l1.data().ptrs[i1])?;
+        // let raw = self.read_block(l0.data().ptrs[i0])?;
+        //
+        // let mut data = T::empty(BlockLevel::default()).unwrap();
+        // data.copy_from_slice(raw.data());
+        // self.fs.inode_to_block_id.get_mut().unwrap().insert(ptr.id(), l0.data().ptrs[i0]);
+        // Ok((TreeData::new(ptr.id(), data), raw.addr()))
 
     }
 
@@ -948,7 +949,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
             let mut dir_ptr: BlockPtr<DirList> = unsafe { dir_record_ptr.cast() };
             let mut dir = self.read_block(dir_ptr)?;
             let mut node_opt = None;
-            for mut entry in dir.data_mut().entries() {
+            for entry in dir.data().entries() {
                 let node_ptr = entry.node_ptr();
 
                 // Skip empty entries
@@ -972,7 +973,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
 
                             // Save node and clear entry
                             node_opt = Some(node);
-                            entry = DirEntry::default();
+                            dir.data_mut().remove_entry(entry_name);
                             break;
                         } else if node.data().is_dir() {
                             // Found directory instead of requested type
@@ -1043,6 +1044,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
                     unsafe { self.deallocate(block_ptr.addr()) };
                     return Ok(Some(node_ptr.id()));
                 }
+
                 return Ok(None);
             }
         }
