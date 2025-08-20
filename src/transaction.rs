@@ -422,16 +422,26 @@ impl<'a, D: Disk> Transaction<'a, D> {
             return Err(Error::new(ENOENT));
         }
 
-        if let Some(bock_ptr) =
-            self.fs.inode_to_block_id.get_mut().unwrap().get(&ptr.id()).cloned()
+        if let Some(&bock_ptr) = self.fs.inode_to_block_id.get_mut().unwrap().get(&ptr.id())
         {
             let raw = self.read_block(bock_ptr)?;
             let mut data = T::empty(BlockLevel::default()).unwrap();
             data.copy_from_slice(raw.data());
-            Ok((TreeData::new(ptr.id(), data), raw.addr()))
-        } else {
-            panic!("READ_TREE: ID IS NULL");
+            return Ok((TreeData::new(ptr.id(), data), raw.addr()))
         }
+
+        let (i3, i2, i1, i0) = ptr.indexes();
+        let l3 = self.read_block(self.header.tree)?;
+        let l2 = self.read_block(l3.data().ptrs[i3])?;
+        let l1 = self.read_block(l2.data().ptrs[i2])?;
+        let l0 = self.read_block(l1.data().ptrs[i1])?;
+        let raw = self.read_block(l0.data().ptrs[i0])?;
+
+        let mut data = T::empty(BlockLevel::default()).unwrap();
+        data.copy_from_slice(raw.data());
+        self.fs.inode_to_block_id.get_mut().unwrap().insert(ptr.id(), l0.data().ptrs[i0]);
+        Ok((TreeData::new(ptr.id(), data), raw.addr()))
+
     }
 
     /// Walk the tree and return the contents of the data block that `ptr` points too.
