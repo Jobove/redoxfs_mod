@@ -128,16 +128,16 @@ impl<'a, D: Disk> Transaction<'a, D> {
             let levels = self.allocator.levels();
             for level in (0..levels.len()).rev() {
                 let count = (1 << level) as i64;
-                'indexs: for &index in levels[level].iter() {
+                'indices: for &index in levels[level].iter() {
                     for entry in self.allocator_log.iter_mut() {
                         if index + count as u64 == entry.index() {
                             // New entry is at start of existing entry
                             *entry = AllocEntry::new(index, count + entry.count());
-                            continue 'indexs;
+                            continue 'indices;
                         } else if entry.index() + entry.count() as u64 == index {
                             // New entry is at end of existing entry
                             *entry = AllocEntry::new(entry.index(), entry.count() + count);
-                            continue 'indexs;
+                            continue 'indices;
                         }
                     }
 
@@ -422,26 +422,40 @@ impl<'a, D: Disk> Transaction<'a, D> {
             return Err(Error::new(ENOENT));
         }
 
-        if let Some(&bock_ptr) = self.fs.inode_to_block_id.get_mut().unwrap().get(&ptr.id())
+        println!("get: {}", ptr.id());
+        let arc = self.fs.inode_to_block_id.clone();
+        let mut lock = arc.write().unwrap();
+        if let Some(&bock_ptr) = lock.get(&ptr.id())
         {
             let raw = self.read_block(bock_ptr)?;
             let mut data = T::empty(BlockLevel::default()).unwrap();
             data.copy_from_slice(raw.data());
-            return Ok((TreeData::new(ptr.id(), data), raw.addr()))
+            return Ok((TreeData::new(ptr.id(), data), bock_ptr.addr()))
         }
-        panic!("READ_TREE: ID IS NULL");
+        // panic!("READ_TREE: ID IS NULL");
+        println!("read_tree: {} cache miss", ptr.id());
 
-        // let (i3, i2, i1, i0) = ptr.indexes();
-        // let l3 = self.read_block(self.header.tree)?;
-        // let l2 = self.read_block(l3.data().ptrs[i3])?;
-        // let l1 = self.read_block(l2.data().ptrs[i2])?;
-        // let l0 = self.read_block(l1.data().ptrs[i1])?;
-        // let raw = self.read_block(l0.data().ptrs[i0])?;
-        //
-        // let mut data = T::empty(BlockLevel::default()).unwrap();
-        // data.copy_from_slice(raw.data());
-        // self.fs.inode_to_block_id.get_mut().unwrap().insert(ptr.id(), l0.data().ptrs[i0]);
-        // Ok((TreeData::new(ptr.id(), data), raw.addr()))
+        let (i3, i2, i1, i0) = ptr.indexes();
+        let l3 = self.read_block(self.header.tree)?;
+        let l2 = self.read_block(l3.data().ptrs[i3])?;
+        let l1 = self.read_block(l2.data().ptrs[i2])?;
+        let l0 = self.read_block(l1.data().ptrs[i1])?;
+        let raw = self.read_block(l0.data().ptrs[i0])?;
+
+        //TODO: transmute instead of copy?
+        let mut data = match T::empty(BlockLevel::default()) {
+            Some(some) => some,
+            None => {
+                #[cfg(feature = "log")]
+                log::error!("READ_TREE: INVALID BLOCK LEVEL FOR TYPE");
+                return Err(Error::new(ENOENT));
+            }
+        };
+        data.copy_from_slice(raw.data());
+
+        lock.insert(ptr.id(), l0.data().ptrs[i0]);
+
+        Ok((TreeData::new(ptr.id(), data), l0.data().ptrs[i0].addr()))
 
     }
 
@@ -465,6 +479,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
         let mut lock = self.fs.treetable.write().unwrap();
         let id = lock.insert().unwrap();
         self.fs.inode_to_block_id.write().unwrap().insert(id, unsafe { block_ptr.cast() });
+        println!("insert: {}", id);
         let tree_ptr = TreePtr::new(id);
 
         Ok(tree_ptr)
@@ -543,7 +558,9 @@ impl<'a, D: Disk> Transaction<'a, D> {
         }
 
         for node in nodes.iter().rev() {
-            let lock = self.fs.inode_to_block_id.get_mut().unwrap();
+            let arc = self.fs.inode_to_block_id.clone();
+            let lock = arc.read().unwrap();
+            println!("get: {}", node.id());
 
             if let Some(&block_ptr) = lock.get(&node.id()) {
                 let mut raw = self.read_block(block_ptr)?;
@@ -1042,6 +1059,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
                             .remove(&node_ptr.id())
                             .unwrap_or_else(|| panic!("Node not found in INODE2BID"));
                     unsafe { self.deallocate(block_ptr.addr()) };
+                    println!("remove: {}", node_ptr.id());
                     return Ok(Some(node_ptr.id()));
                 }
 

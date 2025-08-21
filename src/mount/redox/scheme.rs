@@ -86,7 +86,7 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
                 Some(&working_dir),
                 str::from_utf8(&buf[..count]).or(Err(Error::new(EINVAL)))?,
             )
-            .ok_or(Error::new(EINVAL))?;
+                .ok_or(Error::new(EINVAL))?;
             let target_as_path = RedoxPath::from_absolute(&target).ok_or(Error::new(EINVAL))?;
 
             let (scheme, reference) = target_as_path.as_parts().ok_or(Error::new(EINVAL))?;
@@ -905,6 +905,7 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
 
         self.fs.tx(|tx| file.fmap(fmaps, flags, size, offset, tx))
     }
+
     #[allow(unused_variables)]
     fn munmap(
         &mut self,

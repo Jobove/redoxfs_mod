@@ -1,7 +1,7 @@
 use aes::Aes128;
 use alloc::collections::VecDeque;
 use std::collections::BTreeMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use syscall::error::{Error, Result, EKEYREJECTED, ENOENT, ENOKEY};
 use xts_mode::{get_tweak_default, Xts128};
 
@@ -20,9 +20,9 @@ pub struct FileSystem<D: Disk> {
     pub header: Header,
     pub(crate) allocator: Allocator,
     pub(crate) cipher_opt: Option<Xts128<Aes128>>,
-    pub(crate) inode_to_block_id: RwLock<BTreeMap<u32, BlockPtr<BlockRaw>>>,
-    pub(crate) path_to_inode: RwLock<BTreeMap<String, u64>>,
-    pub(crate) treetable: RwLock<PageTable>,
+    pub(crate) inode_to_block_id: Arc<RwLock<BTreeMap<u32, BlockPtr<BlockRaw>>>>,
+    pub(crate) path_to_inode: Arc<RwLock<BTreeMap<String, u64>>>,
+    pub(crate) treetable: Arc<RwLock<PageTable>>,
 }
 
 impl<D: Disk> FileSystem<D> {
@@ -87,9 +87,9 @@ impl<D: Disk> FileSystem<D> {
                 header,
                 allocator: Allocator::default(),
                 cipher_opt,
-                inode_to_block_id: RwLock::new(BTreeMap::new()),
-                path_to_inode: RwLock::new(BTreeMap::new()),
-                treetable: RwLock::new(PageTable::new()),
+                inode_to_block_id: Arc::new(RwLock::new(BTreeMap::new())),
+                path_to_inode: Arc::new(RwLock::new(BTreeMap::new())),
+                treetable: Arc::new(RwLock::new(PageTable::new())),
             };
 
             unsafe { fs.reset_allocator()? };
@@ -157,7 +157,7 @@ impl<D: Disk> FileSystem<D> {
                     Salt::new().unwrap(),
                     (Key::new().unwrap(), Key::new().unwrap()),
                 )
-                .unwrap();
+                    .unwrap();
                 Some(header.key_slots[0].cipher(password).unwrap())
             }
             None => None,
@@ -169,9 +169,9 @@ impl<D: Disk> FileSystem<D> {
             header,
             allocator: Allocator::default(),
             cipher_opt,
-            inode_to_block_id: RwLock::new(BTreeMap::new()),
-            path_to_inode: RwLock::new(BTreeMap::new()),
-            treetable: RwLock::new(PageTable::new()),
+            inode_to_block_id: Arc::new(RwLock::new(BTreeMap::new())),
+            path_to_inode: Arc::new(RwLock::new(BTreeMap::new())),
+            treetable: Arc::new(RwLock::new(PageTable::new())),
         };
 
         // Write header generation zero

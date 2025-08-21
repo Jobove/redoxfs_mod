@@ -17,7 +17,7 @@ const HTREE_IDX_PADDING: usize =
 pub struct HTreeHash(Le<u32>);
 
 impl HTreeHash {
-    // Create a MAX constant populated iwth the maximum value of Le<u32> minus 1
+    // Create a MAX constant populated with the maximum value of Le<u32> minus 1
     pub const MAX: HTreeHash = HTreeHash(Le(u32::MAX - 1));
 
     #[cfg(not(test))]
@@ -32,7 +32,7 @@ impl HTreeHash {
 
     #[cfg(test)]
     pub fn from_name(name: &str) -> Self {
-        // Allow overriding the hashing function to something easily controled for testing.
+        // Allow overriding the hashing function to something easily controlled for testing.
         let hash = if let Some(pos) = name.rfind("__") {
             let number_str = &name[pos + 2..];
             number_str.parse::<u32>().unwrap()
